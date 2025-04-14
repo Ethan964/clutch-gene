@@ -1,0 +1,526 @@
+---
+title: "Quantifying Clutchness: A Data-Driven Analysis of Performance Under Pressure in Baseball"
+format:
+  poster-typst: 
+    size: "36x24"
+    poster-authors: "Ethan Long"
+    departments: "Department of Statistics"
+    institution-logo: "images/uconn.png"
+    footer-text: "UCSAS 2025"
+    footer-url: "https://uconnsportsanalytics.org"
+    footer-emails: "ethan.long@uconn.edu"
+    footer-color: "ebcfb2"
+    bibliography: refs.bib
+    bibliographystyle: apa
+---
+
+# Abstract
+
+The existence of "clutchness" in professional baseball has long been debated, 
+yet remains difficult to quantify. This study investigates whether
+high-pressure situations influence player performance and whether distinct 
+"clutch" archetypes exist. Using regular season and postseason data from 
+Baseball Reference, we analyze three key performance metrics: On-Base Plus 
+Slugging (OPS), Total Bases (TB), and Championship Win Probability Added 
+(cWPA), to assess how players respond under varying levels of pressure. We 
+employ hypothesis testing to determine statistical significance in performance
+differences, K-means clustering to classify players into archetypes, and
+logistic regression to forecast success in high-leverage situations. By 
+integrating statistical analysis with sabermetrics, this study builds on the 
+foundations of modern baseball analytics @baumer2015 to provide a data-driven 
+perspective on the existence of a possible "clutch gene" in baseball. Our 
+findings have implications for player evaluation, recruitment strategies, and 
+in-game decision-making, offering a more objective framework for understanding 
+performance under pressure. 
+
+# Objectives
+
++ Quantify the Existence of Clutch Performance
+  + Examine whether OPS, TB, and cWPA meaningfully shift in postseason 
+  contexts, responding to longstanding skepticism around clutch hitting @birnbaum2008.
++ Discover Player Archetypes Using Unsupervised Learning
+  + Apply K-means clustering on delta values (ΔOPS, ΔTB, ΔcWPA) to identify 
+  underlying player groupings based on how performance changes under pressure.
++ Model Likelihood of Postseason Success
+  + Utilize logistic regression to estimate the probability of strong
+  postseason performance, using regular season metrics as predictors–bridging
+
+# Data
+
+Player-level statistics for both the regular season and postseason were 
+collected from @baseballreference using season-specific leaderboards. Datasets 
+were constructed for the 2021 and 2023 MLB seasons. Each includes key 
+performance metrics: On-base Plus Slugging (OPS), Total Bases (TB), Championship
+Win Probability Added (cWPA), At Bats (AB), along with unique identifiers to
+track players across seasons and contexts. To ensure statistical reliability 
+and reduce noise from small samples, postseason data was filtered to include 
+players with at least 10 at-bats, allowing for accurate comparisons between 
+regular season and postseason performance.
+
+# Methods
+
++ **Paired Sample T-Tests**
+  + Conducted to assess whether individual-level performance metrics—OPS, TB 
+  per AB, and cWPA—differ significantly between regular and postseason contexts.
+  By comparing each player to themselves across conditions, the test aims to 
+  isolate the potential effects of pressure while controlling for individual 
+  skill level.
++ **K-Means Clustering**
+  + Players were grouped into performance-based archetypes using changes in 
+  OPS, Total Bases (TB), and Championship Win Probability Added (cWPA) between 
+  the regular season and postseason (i.e., ΔOPS, ΔTB, ΔcWPA).
+  + To aid interpretation and visualization, Principal Component Analysis 
+  (PCA) was used to reduce the dataset to two dimensions
++ **Logistic Regression Modeling**
+  + Designed to estimate the odds of a player improving in high-leverage 
+  situations. Regular season performance metrics and game context features 
+  served as independent variables; outcome based on postseason metric deltas.
+
+
+# Results & Visualizations
+
+## Summary Findings 
+
+| Metric | Reg. Season x̄ | Postseason x̄  | Δ (PS - RS)  |
+|--------|---------------|---------------|---------------|
+| OPS    | 0.801         | 0.704         | ↓ 0.097       |
+| TB     | 176.500       | 13.500        | 0 (*Normalized*)|
+| cWPA   | 0.661         | 0.149         | ↓ 0.512       |
+ 
+: 2021 Metric Δs {#tbl-1}
+
+| Metric | Reg. Season x̄ | Postseason x̄ | Δ (PS - RS)  |
+|--------|---------------|--------------|--------------|
+| OPS    | 0.804         | 0.698        | ↓ 0.106      |
+| TB     | 197.250       | 14.667       | 0 (*Normalized*)|
+| cWPA   | 0.703         | -1.450       | ↓ 2.153      |
+
+: 2023 Metric Δs {#tbl-1}
+
+## Distribution of Metric Δs
+```{python}
+
+#| echo: false
+#| warning: false
+#| message: false
+
+# Import necessary packages
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import os
+
+# Initialize 2021 dataset file paths to variable
+rs_ops_tb_2021_path = '/Users/longer/final-project-Ethan964/data/br_2021_rs_ops.csv'
+rs_cwpa_2021_path = '/Users/longer/final-project-Ethan964/data/br_2021_rs_cwpa.csv'
+ps_ops_2021_path = '/Users/longer/final-project-Ethan964/data/br_2021_ps_ops.csv'
+ps_cwpa_2021_path = '/Users/longer/final-project-Ethan964/data/br_2021_ps_cwpa.csv'
+
+
+# Initialize 2023 dataset file paths to variable
+rs_ops_tb_2023_path = '/Users/longer/final-project-Ethan964/data/br_2023_rs_ops.csv'
+rs_cwpa_2023_path = '/Users/longer/final-project-Ethan964/data/br_2023_rs_cwpa.csv'
+ps_ops_2023_path = '/Users/longer/final-project-Ethan964/data/br_2023_ps_ops.csv'
+ps_cwpa_2023_path = '/Users/longer/final-project-Ethan964/data/br_2023_ps_cwpa.csv'
+
+
+# Read csvs and assign to 'br_rs' & 'br_ps'
+rs_ops_tb_2021 = pd.read_csv(rs_ops_tb_2021_path)
+rs_cwpa_2021 = pd.read_csv(rs_cwpa_2021_path)
+ps_ops_tb_2021 = pd.read_csv(ps_ops_2021_path)
+ps_cwpa_2021 = pd.read_csv(ps_cwpa_2021_path)
+rs_ops_tb_2023 = pd.read_csv(rs_ops_tb_2023_path)
+rs_cwpa_2023 = pd.read_csv(rs_cwpa_2023_path)
+ps_ops_tb_2023 = pd.read_csv(ps_ops_2023_path)
+ps_cwpa_2023 = pd.read_csv(ps_cwpa_2023_path)
+
+# Merge Postseason Datasets
+ps_2021 = pd.merge(
+  ps_ops_tb_2021,
+  ps_cwpa_2021,
+  on='playerID',
+  how='inner',
+  suffixes=('_stats', '_cwpa')
+)
+
+ps_2023 = pd.merge(
+  ps_ops_tb_2023,
+  ps_cwpa_2023,
+  on='playerID',
+  how='inner',
+  suffixes=('_stats', '_cwpa')
+)
+
+# Create an AB threshold for postseason qualification
+ab_threshold = 10
+
+# Apply AB qualifier to both years
+ps_2021 = ps_2021[ps_2021['AB'] >= ab_threshold]
+ps_2023 = ps_2023[ps_2023['AB'] >= ab_threshold]
+
+# Merge Regular season datasets
+rs_2021 = pd.merge(
+  rs_ops_tb_2021,
+  rs_cwpa_2021,
+  on='playerID', 
+  how='inner',
+  suffixes=('_stats', '_cwpa')
+)
+
+rs_2023 = pd.merge(
+  rs_ops_tb_2023,
+  rs_cwpa_2023,
+  on='playerID', 
+  how='inner',
+  suffixes=('_stats', '_cwpa')
+)
+
+# Add appropriate suffixes for clarity
+rs_2021 = rs_2021.add_suffix('_2021_rs')
+ps_2021 = ps_2021.add_suffix('_2021_ps')
+rs_2023 = rs_2023.add_suffix('_2023_rs')
+ps_2023 = ps_2023.add_suffix('_2023_ps')
+
+# Keep playerID without suffix to merge correctly
+rs_2021 = rs_2021.rename(columns={'playerID_2021_rs': 'playerID'})
+ps_2021 = ps_2021.rename(columns={'playerID_2021_ps': 'playerID'})
+rs_2023 = rs_2023.rename(columns={'playerID_2023_rs': 'playerID'})
+ps_2023 = ps_2023.rename(columns={'playerID_2023_ps': 'playerID'})
+
+# Merge Regular and Postseason datasets
+df_2021 = pd.merge(
+  rs_2021,
+  ps_2021, 
+  on='playerID',
+  how='inner',
+  suffixes=('_rs', '_ps')
+)
+
+df_2023 = pd.merge(
+  rs_2023,
+  ps_2023, 
+  on='playerID',
+  how='inner',
+  suffixes=('_rs', '_ps')
+)
+
+# Drop all redundant columns after looking at list of columns
+# List of columns to drop
+columns_to_drop = [
+    'Player_stats_2021_rs', 'Player_cwpa_2021_rs', 'Player_stats_2021_ps', 'Player_cwpa_2021_ps',
+    'Player_stats_2023_rs', 'Player_cwpa_2023_rs', 'Player_stats_2023_ps', 'Player_cwpa_2023_ps'
+]
+
+# Drop redundant columns
+df_2021 = df_2021.drop(columns=columns_to_drop, errors='ignore')
+df_2023 = df_2023.drop(columns=columns_to_drop, errors='ignore')
+
+# Change all columns to lowercase for uniformity
+df_2021.columns = df_2021.columns.str.lower()
+df_2023.columns = df_2023.columns.str.lower()
+
+# Change cwpa columns from percents to decimal values
+df_2021['cwpa_2021_rs'] = df_2021['cwpa_2021_rs'].str.replace('%', '').astype(float)
+df_2023['cwpa_2023_rs'] = df_2023['cwpa_2023_rs'].str.replace('%', '').astype(float)
+df_2021['cwpa_2021_ps'] = df_2021['cwpa_2021_ps'].str.replace('%', '').astype(float)
+df_2023['cwpa_2023_ps'] = df_2023['cwpa_2023_ps'].str.replace('%', '').astype(float)
+
+# Create columns that calcuate the delta of each metric
+df_2021['ops_delta'] = df_2021['ops_2021_ps'] - df_2021['ops_2021_rs']
+df_2023['ops_delta'] = df_2023['ops_2023_ps'] - df_2023['ops_2023_rs']
+
+df_2021['cwpa_delta'] = df_2021['cwpa_2021_ps'] - df_2021['cwpa_2021_rs']
+df_2023['cwpa_delta'] = df_2023['cwpa_2023_ps'] - df_2023['cwpa_2023_rs']
+
+# Before we find the delta of TB, lets normalize the TB columns
+df_2021['tb_per_ab_2021_rs'] = df_2021['tb_2021_rs'] / df_2021['ab_2021_rs']
+df_2021['tb_per_ab_2021_ps'] = df_2021['tb_2021_ps'] / df_2021['ab_2021_ps']
+df_2023['tb_per_ab_2023_rs'] = df_2023['tb_2023_rs'] / df_2023['ab_2023_rs']
+df_2023['tb_per_ab_2023_ps'] = df_2023['tb_2023_ps'] / df_2023['ab_2023_ps']
+
+# Now calc. delta for TB
+df_2021['tb_per_ab_delta'] = df_2021['tb_per_ab_2021_ps'] - df_2021['tb_per_ab_2021_rs']
+df_2023['tb_per_ab_delta'] = df_2023['tb_per_ab_2023_ps'] - df_2023['tb_per_ab_2023_rs']
+
+sns.set(style="whitegrid")
+plt.rcParams.update({
+    'figure.figsize': (10, 4),
+    'axes.titlesize': 16,
+    'axes.labelsize': 14,
+    'xtick.labelsize': 12,
+    'ytick.labelsize': 12,
+    'legend.fontsize': 12
+})
+
+def plot_metric_deltas(df_2021, df_2023, metric, label, xlabel):
+    fig, axs = plt.subplots(1, 2, figsize=(6, 3), sharey=True)
+
+    sns.histplot(df_2021[metric].dropna(), bins=15, color='steelblue', ax=axs[0], edgecolor='black')
+    axs[0].axvline(0, color='red', linestyle='--')
+    axs[0].set_title(f'{label} Δ (2021)', fontsize=10)
+    axs[0].set_xlabel(xlabel, fontsize=9)
+    axs[0].set_ylabel("Players", fontsize=9)
+
+    sns.histplot(df_2023[metric].dropna(), bins=15, color='seagreen', ax=axs[1], edgecolor='black')
+    axs[1].axvline(0, color='red', linestyle='--')
+    axs[1].set_title(f'{label} Δ (2023)', fontsize=10)
+    axs[1].set_xlabel(xlabel, fontsize=9)
+
+    for ax in axs:
+        ax.tick_params(axis='both', labelsize=8)
+
+    plt.tight_layout()
+    os.makedirs("graphs", exist_ok=True)
+    plt.savefig(f'graphs/{metric}_halfsize.png', dpi=300)
+    plt.close()
+
+
+# Generate plots for each metric
+plot_metric_deltas(df_2021, df_2023, 'ops_delta', 'OPS', 'OPS Difference (PS - RS)')
+plot_metric_deltas(df_2021, df_2023, 'tb_per_ab_delta', 'TB per AB', 'TB/AB Difference (PS - RS)')
+plot_metric_deltas(df_2021, df_2023, 'cwpa_delta', 'cWPA', 'cWPA Difference (PS - RS)')
+
+
+```
+
+```{python}
+#| echo: false
+#| warning: false
+#| message: false
+
+from PIL import Image
+Image.new("RGBA", (1, 1), (255, 255, 255, 0)).save("graphs/spacer.png")
+
+```
+
+![](graphs/ops_delta_halfsize.png){ width=49% }
+![](graphs/tb_per_ab_delta_halfsize.png){ width=49% }
+
+!["Distributions of postseason vs. regular season deltas for OPS, total bases per at-bat, and clutch WPA, showing shifts in player performance."](graphs/cwpa_delta_halfsize.png){ width=55% }
+
+
+
++ T-tests: Statistically significant drops in all three metrics for both 2021 &
+2023
++ Δ Distribution: Most players decline under pressure, but a few improve.
+
+
+
+## K-Means Clustering
+
++ Players grouped by ΔOPS, ΔTB, ΔcWPA and visualized with PCA for dimension reduction.
+
+!["K-Means clustering of 2021 and 2023 player deltas, projected via PCA to show groupings based on offensive and clutch performance shifts. Each cluster represents a distinct player response pattern to postseason pressure."](kmeans_clusters_combined_halfsize.png){ width=105% }
+
+```{python}
+#| echo: false
+#| warning: false
+#| message: false
+
+#Define features for model
+features_2021 = df_2021[[
+  'ops_delta', 
+  'tb_per_ab_delta', 
+  'cwpa_delta'
+]].copy()
+features_2023 = df_2023[[
+  'ops_delta', 
+  'tb_per_ab_delta', 
+  'cwpa_delta'
+]].copy()
+
+# Import necessary packages
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+
+# Initialize scaler
+scaler = StandardScaler()
+
+# Transform dfs sing scaler
+features_2021_scaled = scaler.fit_transform(features_2021)
+features_2023_scaled= scaler.fit_transform(features_2023)
+
+kmeans_2021 = KMeans(n_clusters=3, random_state=1234)
+kmeans_2023 = KMeans(n_clusters=3, random_state=1234)
+
+df_2021['cluster'] = kmeans_2021.fit_predict(features_2021_scaled)
+df_2023['cluster'] = kmeans_2023.fit_predict(features_2023_scaled)
+
+def plot_clusters(data_scaled, labels, year):
+  pca = PCA(n_components=2)
+  reduced = pca.fit_transform(data_scaled)
+  plt.figure(figsize=(3, 2.5))
+  scatter = plt.scatter(reduced[:, 0], reduced[:, 1], c=labels)
+  plt.title(f'K-Means Clusters (PCA Projection) - {year}')
+  plt.xlabel('Principal Component 1')
+  plt.ylabel('Principal Component 2')
+  plt.grid(True)
+  plt.tight_layout()
+  plt.show()
+
+cluster_labels_2021 = {
+  0 : 'Consistent Performers',
+  1 : 'Postseason Falloff Performers',
+  2 : 'Clutch Performers'
+}
+
+cluster_labels_2023 = {
+  0 : 'Postseason Falloff Performers',
+  1 : 'Consistent Performers', 
+  2 : 'Clutch Performers'
+}
+
+df_2021['cluster_label'] = df_2021['cluster'].map(cluster_labels_2021)
+df_2023['cluster_label'] = df_2023['cluster'].map(cluster_labels_2023)
+
+# Find players of interest
+highlight_players_2021 = pd.concat([
+    df_2021.nlargest(2, 'ops_delta'),
+    df_2021.nsmallest(2, 'ops_delta')
+])
+
+highlight_ids_2021 = highlight_players_2021['playerid'].tolist()
+
+highlight_players_2023 = pd.concat([
+    df_2023.nlargest(2, 'ops_delta'),
+    df_2023.nsmallest(2, 'ops_delta')
+])
+
+highlight_ids_2023 = highlight_players_2023['playerid'].tolist() 
+
+def plot_clusters_pca_side_by_side(features_2021_scaled, df_2021, features_2023_scaled, df_2023,
+                                   cluster_labels_2021, cluster_labels_2023,
+                                   highlight_ids_2021=[], highlight_ids_2023=[]):
+
+    from matplotlib.patches import Patch
+
+    # Prepare PCA transforms
+    pca = PCA(n_components=2)
+    reduced_2021 = pca.fit_transform(features_2021_scaled)
+    pca1_var_2021, pca2_var_2021 = pca.explained_variance_ratio_[:2] * 100
+
+    pca = PCA(n_components=2)
+    reduced_2023 = pca.fit_transform(features_2023_scaled)
+    pca1_var_2023, pca2_var_2023 = pca.explained_variance_ratio_[:2] * 100
+
+    # Add PCA coords and labels
+    df_2021 = df_2021.copy()
+    df_2021['PCA1'] = reduced_2021[:, 0]
+    df_2021['PCA2'] = reduced_2021[:, 1]
+    df_2021['label'] = df_2021['cluster'].map(cluster_labels_2021)
+
+    df_2023 = df_2023.copy()
+    df_2023['PCA1'] = reduced_2023[:, 0]
+    df_2023['PCA2'] = reduced_2023[:, 1]
+    df_2023['label'] = df_2023['cluster'].map(cluster_labels_2023)
+
+    # Plot setup
+    fig, axs = plt.subplots(1, 2, figsize=(6.4, 2.5), sharex=False, sharey=False)
+
+    # Get unique labels in each year
+    labels_2021 = df_2021['label'].unique()
+    labels_2023 = df_2023['label'].unique()
+
+    # Assign colors dynamically per year
+    palette_2021 = sns.color_palette("Set1", len(labels_2021))
+    palette_2023 = sns.color_palette("Set2", len(labels_2023))
+
+    label_to_color_2021 = dict(zip(sorted(labels_2021), palette_2021))
+    label_to_color_2023 = dict(zip(sorted(labels_2023), palette_2023))
+
+    for df, year, ax, pca1_var, pca2_var, highlight_ids, label_to_color in [
+        (df_2021, '2021', axs[0], pca1_var_2021, pca2_var_2021, highlight_ids_2021, label_to_color_2021),
+        (df_2023, '2023', axs[1], pca1_var_2023, pca2_var_2023, highlight_ids_2023, label_to_color_2023)
+    ]:
+        # Plot points with custom palette
+        sns.scatterplot(
+            data=df, x='PCA1', y='PCA2', hue='label',
+            palette=label_to_color, ax=ax, s=30, edgecolor='black', legend=False
+        )
+
+        # Highlight player ids
+        for _, row in df[df['playerid'].isin(highlight_ids)].iterrows():
+            ax.annotate(row['playerid'], (row['PCA1'], row['PCA2']),
+                        textcoords="offset points", xytext=(5, 5), ha='left',
+                        fontsize=6, weight='bold')
+
+        # Set plot aesthetics
+        ax.set_title(f'K-Means Clusters ({year})', fontsize=10)
+        ax.set_xlabel(f'PC1 ({pca1_var:.1f}%)', fontsize=9)
+        ax.set_ylabel(f'PC2 ({pca2_var:.1f}%)', fontsize=9)
+        ax.tick_params(labelsize=8)
+        ax.grid(True)
+
+        # Build legend manually
+        legend_elements = [
+            Patch(facecolor=color, edgecolor='black', label=label)
+            for label, color in label_to_color.items()
+        ]
+        ax.legend(handles=legend_elements, title='Clusters', loc='upper left',
+                  fontsize=7, title_fontsize=8, frameon=True, framealpha=0.85)
+
+    plt.tight_layout()
+    plt.savefig("kmeans_clusters_combined_halfsize.png", dpi=300)
+    plt.close()
+
+# Plot clusters for both years
+plot_clusters_pca_side_by_side(
+    features_2021_scaled, df_2021,
+    features_2023_scaled, df_2023,
+    cluster_labels_2021, cluster_labels_2023,
+    highlight_ids_2021, highlight_ids_2023
+)
+
+```
+
+
+# Interpretation
+
+## Does "Clutchness" Exist?
+
+Players show measurable differences between regular and postseason performance,
+with many concentrated just below the 0.0 delta line, indicating that pressure 
+impacts outcomes. Paired t-tests confirm these changes are statistically 
+significant.
+
+## Do Distinct Performance Profiles Emerge?
+
+These patterns suggest systematic differences rather than random variance,
+consistent with theories of pressure-influenced performance proposed by @hibbs2010.
+
+
+# Conclusions
+
+## Rethinking "Clutchness"
+
+This study provides a **data-driven challenge** to the narrative that "clutch"
+performance is merely anecdotal or unmeasurable. By comparing postseason and
+regular season data, statistical testing, and unsupervised learning methods, 
+we demonstrate that performance under pressure can be measured, labeled, and 
+learned from.
+
+## Key Takeaways
+
+"Clutchness" is not random — it emerges from data and persists across seasons. 
+Clustering reveals hidden player profiles that average metrics miss. This
+quantitative framing gives credibility to traits often dismissed as intangible.
+
+
+## Looking Forward
+
+Future extensions of this framework could explore how clutch performance 
+profiles connect to deeper player characteristics — including **biomechanical markers**, **mental resilience traits**, and **career-long trends**.
+
+## Broader Impact
+
+Integrating these dimensions could advance how teams evaluate players, 
+bridging the gap between performance analytics and qualitative assessment.
+As organizations push beyond surface stats, quantifying clutch behavior may 
+help unite **analytics and intangibles** — two areas long treated as a
+**mutually exclusive** pairing.
+
+::: {#refs}
+
+:::
