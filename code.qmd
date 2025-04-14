@@ -1,0 +1,832 @@
+---
+title: 'Clutch Gene'
+author: 'Ethan Long'
+date: '2025-03-28'
+format:
+  pdf:
+    colorlinks: true
+    linkcolor: blue
+    number-sections: true
+    geometry: margin=1in
+    fontsize: 11pt 
+cite-method: citeproc
+link-citations: true
+suppress-bibliography: false
+biblio graphy: references.bib # create your own bib file
+csl: apa.csl
+---
+
+# Import and Clean Data
+
+## Read and Laod in Baseball Reference Datasets
+
+We start by loading the required libraries and reading in the dataset from 
+*Baseball Reference*. This step ensures we have the necessary data to work
+with. 
+
+```{python}
+
+# Import necessary packages
+import pandas as pd
+import numpy as np
+
+# Initialize 2021 dataset file paths to variable
+rs_ops_tb_2021_path = '/Users/longer/final-project-Ethan964/data/br_2021_rs_ops.csv'
+rs_cwpa_2021_path = '/Users/longer/final-project-Ethan964/data/br_2021_rs_cwpa.csv'
+ps_ops_2021_path = '/Users/longer/final-project-Ethan964/data/br_2021_ps_ops.csv'
+ps_cwpa_2021_path = '/Users/longer/final-project-Ethan964/data/br_2021_ps_cwpa.csv'
+
+
+# Initialize 2023 dataset file paths to variable
+rs_ops_tb_2023_path = '/Users/longer/final-project-Ethan964/data/br_2023_rs_ops.csv'
+rs_cwpa_2023_path = '/Users/longer/final-project-Ethan964/data/br_2023_rs_cwpa.csv'
+ps_ops_2023_path = '/Users/longer/final-project-Ethan964/data/br_2023_ps_ops.csv'
+ps_cwpa_2023_path = '/Users/longer/final-project-Ethan964/data/br_2023_ps_cwpa.csv'
+
+
+# Read csvs and assign to 'br_rs' & 'br_ps'
+rs_ops_tb_2021 = pd.read_csv(rs_ops_tb_2021_path)
+rs_cwpa_2021 = pd.read_csv(rs_cwpa_2021_path)
+ps_ops_tb_2021 = pd.read_csv(ps_ops_2021_path)
+ps_cwpa_2021 = pd.read_csv(ps_cwpa_2021_path)
+rs_ops_tb_2023 = pd.read_csv(rs_ops_tb_2023_path)
+rs_cwpa_2023 = pd.read_csv(rs_cwpa_2023_path)
+ps_ops_tb_2023 = pd.read_csv(ps_ops_2023_path)
+ps_cwpa_2023 = pd.read_csv(ps_cwpa_2023_path)
+
+
+```
+
+
+## Merge Datasets Together
+
+As we have two datasets for every regular season, postseason, and year, lets
+combine each dataset containing OPS & TB with the datasets containing cWPA. 
+
+```{python}
+
+# Merge Postseason Datasets
+ps_2021 = pd.merge(
+  ps_ops_tb_2021,
+  ps_cwpa_2021,
+  on='playerID',
+  how='inner',
+  suffixes=('_stats', '_cwpa')
+)
+
+ps_2023 = pd.merge(
+  ps_ops_tb_2023,
+  ps_cwpa_2023,
+  on='playerID',
+  how='inner',
+  suffixes=('_stats', '_cwpa')
+)
+
+# Create an AB threshold for postseason qualification
+ab_threshold = 10
+
+# Apply AB qualifier to both years
+ps_2021 = ps_2021[ps_2021['AB'] >= ab_threshold]
+ps_2023 = ps_2023[ps_2023['AB'] >= ab_threshold]
+
+# Merge Regular season datasets
+rs_2021 = pd.merge(
+  rs_ops_tb_2021,
+  rs_cwpa_2021,
+  on='playerID', 
+  how='inner',
+  suffixes=('_stats', '_cwpa')
+)
+rs_2023 = pd.merge(
+  rs_ops_tb_2023,
+  rs_cwpa_2023,
+  on='playerID', 
+  how='inner',
+  suffixes=('_stats', '_cwpa')
+)
+
+# Add appropriate suffixes for clarity
+rs_2021 = rs_2021.add_suffix('_2021_rs')
+ps_2021 = ps_2021.add_suffix('_2021_ps')
+rs_2023 = rs_2023.add_suffix('_2023_rs')
+ps_2023 = ps_2023.add_suffix('_2023_ps')
+
+# Keep playerID without suffix to merge correctly
+rs_2021 = rs_2021.rename(columns={'playerID_2021_rs': 'playerID'})
+ps_2021 = ps_2021.rename(columns={'playerID_2021_ps': 'playerID'})
+rs_2023 = rs_2023.rename(columns={'playerID_2023_rs': 'playerID'})
+ps_2023 = ps_2023.rename(columns={'playerID_2023_ps': 'playerID'})
+
+# Merge Regular and Postseason datasets
+df_2021 = pd.merge(
+  rs_2021,
+  ps_2021, 
+  on='playerID',
+  how='inner',
+  suffixes=('_rs', '_ps')
+)
+
+df_2023 = pd.merge(
+  rs_2023,
+  ps_2023, 
+  on='playerID',
+  how='inner',
+  suffixes=('_rs', '_ps')
+)
+
+# Verify data in both datasets
+print(df_2021.columns)
+print(df_2023.columns)
+
+```
+
+## Format and Clean Column Names
+
+To maintain consistency and avoid potential issues when handling column names,
+we convert them to lowercase and replace spaces with underscores. Additionally,
+we rename and clean player names for better usability.
+
+```{python}
+
+# Drop all redundant columns after looking at list of columns
+# List of columns to drop
+columns_to_drop = [
+    'Player_stats_2021_rs', 'Player_cwpa_2021_rs', 'Player_stats_2021_ps', 'Player_cwpa_2021_ps',
+    'Player_stats_2023_rs', 'Player_cwpa_2023_rs', 'Player_stats_2023_ps', 'Player_cwpa_2023_ps'
+]
+
+# Drop redundant columns
+df_2021 = df_2021.drop(columns=columns_to_drop, errors='ignore')
+df_2023 = df_2023.drop(columns=columns_to_drop, errors='ignore')
+
+# Change all columns to lowercase for uniformity
+df_2021.columns = df_2021.columns.str.lower()
+df_2023.columns = df_2023.columns.str.lower()
+
+# Change cwpa columns from percents to decimal values
+df_2021['cwpa_2021_rs'] = df_2021['cwpa_2021_rs'].str.replace('%', '').astype(float)
+df_2023['cwpa_2023_rs'] = df_2023['cwpa_2023_rs'].str.replace('%', '').astype(float)
+df_2021['cwpa_2021_ps'] = df_2021['cwpa_2021_ps'].str.replace('%', '').astype(float)
+df_2023['cwpa_2023_ps'] = df_2023['cwpa_2023_ps'].str.replace('%', '').astype(float)
+
+# Check the cleaned column names
+print(df_2021.columns)
+print(df_2023.columns)
+
+```
+
+
+# Exploratory Analysis of MLB Datasets
+
+## Getting Familiar With the Dataset
+
+Before we start modeling and performing statistical analysis on our data, let's
+conduct exploratory data analysis to understand the structure, distribution,
+and relationships between player performance metrics between regular season 
+and the postseason. 
+
+## Dataset Overview
+
+```{python}
+
+# Check length of dataset
+print(f'Length of 2021 Dataset: {len(df_2021)}')
+print(f'Length of 2023 Dataset: {len(df_2023)}')
+
+# Check for any missing columns
+print(f'Amount of missing data in 2021 entries per column:\n{df_2021.isna().sum()}')
+print(f'Amount of missing data in 2023 entries per column:\n{df_2023.isna().sum()}')
+
+```
+
+### Summary Statistics
+
+
+
+**2021**
+
+| Season | Metric | Mean | Median | Std. Dev. |
+| ---------- | ---------- | ---------- | ---------- | ------ |
+|  Regular Season | OPS | 0.801 | 0.800 | 0.087 |
+|  Postseason | OPS | 0.704 | 0.690 | 0.273 | 
+|  Regular Season | TB | 176.521 | 175.5 | 75.353 | 
+|  Postseason | TB | 13.479 | 11 | 10.32 | 
+|  Regular Season | cWPA | 0.149 | 0.750 | 0.972 | 
+|  Postseason | cWPA | 1.303 | -1.050 | 7.536 | 
+
+**2023**
+
+| Season | Metric | Mean | Median | Std. Dev. |
+| ---------- | ---------- | ---------- | ---------- | ------ |
+| Regular Season | OPS | 0.804 | 0.793 | 0.094 | 
+| Postseason | OPS | 0.698 | 0.645 | 0.325 | 
+|  Regular Season | TB | 197.250 | 198.500 | 67.692 |
+|  Postseason | TB | 14.667 | 9.000 | 13.219 | 
+|  Regular Season | cWPA | 0.703 | 0.650 | 1.565 | 
+|  Postseason | cWPA | 1.303 | -1.450 | 9.468 |  
+
+
+## Graphing Distribution 
+
+After ensuring the datasets' cleanliness and uniformity, let's explore the 
+relationship between regular season and postseason performance. First lets
+map the distribution of all three performance metrics in both types of context.
+We will overlay two histograms on eachother, regular season and postseason, for
+each metric.
+
+```{python}
+
+# Import necessary packages
+from plotnine import *
+
+# Merge ops data for distribution visualization
+df_ops_2021 = df_2021[['ops_2021_rs', 'ops_2021_ps']].copy()
+df_ops_2021 = df_ops_2021.rename(columns={
+    'ops_2021_rs': 'Regular Season',
+    'ops_2021_ps': 'Postseason'
+})
+df_ops_2021 = df_ops_2021.melt(var_name='Season', value_name='OPS')
+
+# ggplot hisotgram for ops
+ops_hist_overlay = (
+    ggplot(df_ops_2021, aes(x='OPS', fill='Season')) +
+    geom_histogram(position='identity', alpha=0.5, bins=20, color='black') +
+    labs(
+        title='OPS Distribution: Regular Season vs Postseason (2021)',
+        x='OPS', y='Count'
+    ) +
+    theme_minimal() +
+    theme(plot_title=element_text(face='bold'))
+)
+
+# Merge cwpa data for distribution visualization
+df_cwpa_2021 = df_2021[['cwpa_2021_rs', 'cwpa_2021_ps']].copy()
+df_cwpa_2021 = df_cwpa_2021.rename(columns={
+    'cwpa_2021_rs': 'Regular Season',
+    'cwpa_2021_ps': 'Postseason'
+})
+df_cwpa_2021 = df_cwpa_2021.melt(var_name='Season', value_name='cWPA')
+
+# ggplot hisotgram for cwpa 
+cwpa_hist_overlay = (
+    ggplot(df_cwpa_2021, aes(x='cWPA', fill='Season')) +
+    geom_histogram(position='identity', alpha=0.5, bins=20, color='black') +
+    labs(
+        title='cWPA Distribution: Regular Season vs Postseason (2021)',
+        x='cWPA', y='Count'
+    ) +
+    theme_minimal() +
+    theme(plot_title=element_text(face='bold'))
+)
+
+# Merge cwpa data for distribution visualization
+
+df_tb_2021 = df_2021[['tb_2021_rs', 'tb_2021_ps']].copy()
+df_tb_2021 = df_tb_2021.rename(columns={
+    'tb_2021_rs': 'Regular Season',
+    'tb_2021_ps': 'Postseason'
+})
+df_tb_2021 = df_tb_2021.melt(var_name='Season', value_name='TB')
+
+# Normalize the TB values 
+from scipy.stats import zscore
+
+df_2021['tb_2021_rs_z'] = zscore(df_2021['tb_2021_rs'])
+df_2021['tb_2021_ps_z'] = zscore(df_2021['tb_2021_ps'])
+
+df_tb_2021 = df_2021[['tb_2021_rs_z', 'tb_2021_ps_z']].copy()
+df_tb_2021 = df_tb_2021.rename(columns={
+    'tb_2021_rs_z': 'Regular Season',
+    'tb_2021_ps_z': 'Postseason'
+})
+df_tb_2021 = df_tb_2021.melt(var_name='Season', value_name='TB_z')
+
+# Create the plot using the updated DataFrame
+tb_hist_overlay = (
+    ggplot(df_tb_2021, aes(x='TB_z', fill='Season')) + 
+    geom_histogram(position='identity', alpha=0.5, bins=20, color='black') +
+    labs(
+        title='Standardized Total Bases (z-score): Regular Season vs Postseason (2021)',
+        x='Standardized TB',
+        y='Count'
+    ) +
+    theme_minimal() +
+    theme(plot_title=element_text(face='bold'))
+)
+
+# Display all three distributions
+ops_hist_overlay.show()
+cwpa_hist_overlay.show()
+tb_hist_overlay.show()
+
+```
+
+
+## Computing Correlation Between Key Variables
+
+To understand the relationship between two metrics that we will be heavily 
+using: Total Bases (TB) and At Bats (AB). We will plot the regular and 
+postseason Total Bases of every qualified player over their number of At Bats.  
+
+### 2021 Postseason
+
+```{python}
+
+# Create labeled dataframes holding TB and AB data
+
+# Set up a scatter plot where x is TBs and y is ABs
+scatter_ps_2021 = (
+  ggplot(df_2021, aes(x='tb_2021_ps', y='ab_2021_ps')) + 
+  geom_point(color='blue', alpha=0.5, size=3) + 
+  labs(
+    x='Postseason Total Bases (TB)',
+    y='Postseason At Bats (AB)', 
+    title='2021 Postseason Performance TB vs. AB'
+  ) +
+  geom_smooth(method='lm', color='darkred', se=False) + 
+  aes(color='team') + 
+  theme_minimal() + 
+  theme(plot_title=element_text(face='bold'))
+)
+
+print(scatter_ps_2021)
+
+```
+
+### 2021 Regular Season
+
+```{python}
+
+# Do the same for the regular season
+scatter_rs_2021 = (
+  ggplot(df_2021, aes(x='tb_2021_rs', y='ab_2021_rs')) + 
+  geom_point(color='blue', alpha=0.5, size=3) + 
+  labs(
+    x='Regular Season Total Bases (TB)',
+    y='Regular Season At Bats (AB)', 
+    title='2021 Regular Season Performance TB vs. AB'
+  ) + 
+  geom_smooth(method='lm', color='darkred', se=False) + 
+  aes(color='team') + 
+  theme_minimal() + 
+  theme(plot_title=element_text(face='bold'))
+)
+print(scatter_rs_2021)
+
+```
+
+We can see a clear positive correlation between the two variables with slightly
+more variation and spread in the Postseason graph. Lets check the correlation 
+between the two variables for both the 2021 and 2023 season.
+
+
+## Correlation of
+```{python}
+
+# Calculat correlation value for each relationship
+tb_ab_correlation_2021_rs = df_2021['tb_2021_rs'].corr(df_2021['ab_2021_rs'])
+tb_ab_correlation_2021_ps = df_2021['tb_2021_ps'].corr(df_2021['ab_2021_ps'])
+tb_ab_correlation_2023_rs = df_2023['tb_2023_rs'].corr(df_2023['ab_2023_rs'])
+tb_ab_correlation_2023_ps = df_2023['tb_2023_ps'].corr(df_2023['ab_2023_ps'])
+
+# Print results
+print(f'Correlation between TB and AB for 2021 Regular Season: {tb_ab_correlation_2021_rs}')
+print(f'Correlation between TB and AB for 2021 Postseason: {tb_ab_correlation_2021_ps}')
+print(f'Correlation between TB and AB for 2023 Regular Season: {tb_ab_correlation_2023_rs}')
+print(f'Correlation between TB and AB for 2023 PostSeason: {tb_ab_correlation_2023_ps}')
+
+```
+
+#### Correlation Interpretation
+
+From four simple calcuations, we can tell that there is a strong positive 
+correlation between a player's Total Bases and amount of At Bats, indicating
+that, in general, more opportunities to bat lead to higher offensive 
+production. However the correlation weakens by approximately 10 percentage
+points in both the 2021 & 2023 postseason data. This suggests that in 
+high-leverage play, the relationship between TBs and ABs is less deterministic.
+Meaning having more At Bats doesn't directly lead to more Total Bases. While 
+regular season performance strongly links ABs to TBs, postseason performance 
+appears more variable, with factors beyond opportunity playing a larger role in
+offensive production. 
+
+## Identifying Outliers
+
+To assess which players had the biggest shift in perfomance from regular season
+to postseason, we calculate the delta.
+
+```{python}
+
+# Create columns that calcuate the delta of each metric
+df_2021['ops_delta'] = df_2021['ops_2021_ps'] - df_2021['ops_2021_rs']
+df_2023['ops_delta'] = df_2023['ops_2023_ps'] - df_2023['ops_2023_rs']
+
+df_2021['cwpa_delta'] = df_2021['cwpa_2021_ps'] - df_2021['cwpa_2021_rs']
+df_2023['cwpa_delta'] = df_2023['cwpa_2023_ps'] - df_2023['cwpa_2023_rs']
+
+# Before we find the delta of TB, lets normalize the TB columns
+df_2021['tb_per_ab_2021_rs'] = df_2021['tb_2021_rs'] / df_2021['ab_2021_rs']
+df_2021['tb_per_ab_2021_ps'] = df_2021['tb_2021_ps'] / df_2021['ab_2021_ps']
+df_2023['tb_per_ab_2023_rs'] = df_2023['tb_2023_rs'] / df_2023['ab_2023_rs']
+df_2023['tb_per_ab_2023_ps'] = df_2023['tb_2023_ps'] / df_2023['ab_2023_ps']
+
+# Now calc. delta for TB
+df_2021['tb_per_ab_delta'] = df_2021['tb_per_ab_2021_ps'] - df_2021['tb_per_ab_2021_rs']
+df_2023['tb_per_ab_delta'] = df_2023['tb_per_ab_2023_ps'] - df_2023['tb_per_ab_2023_rs']
+
+```
+
+A positive delta suggests a player elevated their performance in the 
+postseason ("clutch"), while the negative delta implies a drop-off ("choke"
+or regression to mean).
+
+Lets find the top five most "clutch" players and top five worst performers:
+
+```{python}
+
+top_delta_2021 = df_2021.nlargest(5, 'ops_delta')[['playerid', 'ops_delta']]
+top_delta_2023 = df_2023.nlargest(5, 'ops_delta')[['playerid', 'ops_delta']]
+bottom_delta_2021 = df_2021.nsmallest(5, 'ops_delta')[['playerid', 'ops_delta']]
+bottom_delta_2023 = df_2023.nsmallest(5, 'ops_delta')[['playerid', 'ops_delta']]
+
+print('Top 5 OPS Risers (Clutch Performers): ')
+print(top_delta_2021)
+print(top_delta_2023)
+
+print('Top 5 OPS Fallers (Postseason Drop-offs): ')
+print(bottom_delta_2021)
+print(bottom_delta_2023)
+
+```
+
+## Regression Analysis of Total Bases vs. At Bats
+
+To quantify the relationship between a player's offensive production and their
+opportunities to hit, we will perform Ordinary Least Squares regression. 
+
+
+```{python}
+
+import statsmodels.api as sm
+
+# Set x & y variables to proper columns for 2021 regular season and postseason
+# X = At Bats (AB)
+# y = Total Bases (TB)
+X_rs_2021 = df_2021['tb_2021_rs']
+y_rs_2021 = df_2021['ab_2021_rs']
+X_ps_2021 = df_2021['tb_2021_ps']
+y_ps_2021 = df_2021['ab_2021_ps']
+
+# Add intercept and fit for both iterations of the model
+X_rs_2021 = sm.add_constant(X_rs_2021)
+X_ps_2021 = sm.add_constant(X_ps_2021)
+rs_model_2021 = sm.OLS(y_rs_2021, X_rs_2021).fit()
+ps_model_2021 = sm.OLS(y_ps_2021, X_ps_2021).fit()
+
+# Extract key metrics using statsmodels
+rs_r_squared = rs_model_2021.rsquared # Start with R²
+ps_r_squared = ps_model_2021.rsquared
+rs_p_value = rs_model_2021.f_pvalue # P-values
+ps_p_value = ps_model_2021.f_pvalue
+rs_slope = rs_model_2021.params[1] # Slopes
+ps_slope = ps_model_2021.params[1]
+rs_intercept = rs_model_2021.params[0] # Intercepts
+ps_intercept = ps_model_2021.params[0]
+
+# Print model summaries for both
+print(rs_model_2021.summary())
+print(ps_model_2021.summary())
+
+```
+
+
+### Intepreting OLS Models
+
+2021 MLB Season: 
+  Regular Season:
+    - Strong Positive Relationship (R² = 0.923)
+    92.3% of variation in At Bats is explained by Total Bases
+    - Slope: 1.85 AB per TB
+    For every additional Total Base, players averaged 1.85 more At Bats
+    - Highly Significant (p-value < 0.001)
+  Postseason: 
+    - Weaker But Still Strong Relationship (R² = 0.732)
+    73.2% of variation in At Bats is explained by Total Bases
+    - Slope: 1.56 AB per TB
+    Each Total Base earned fewer additional At Bats opportunities vs. regular
+    season
+    - Highly Significant (p-value < 0.001)
+
+Direction Comparison 
+
+| Metric | Regular Season | Postseason | Difference | 
+| R² | 0.923 | 0.732 | -20.7% | 
+|Slope | 1.85 | 1.56 | -15.7% | 
+
+### Practical Implications
+
+1. Opportunity Matters Less in Postseason
+  - A weaker correlation between ABs and TBs in the postseason suggests 
+  opportunity has less influence on a player's offensive production. 
+2. Scouting/Development
+  - Players who maintain regular season TB/AB ratios in the playoffs are 
+  especially valuable.  
+3. Sample Size Warning
+  - Postseason models have higher variance (wider confidence intervals with 
+  identical confidence levels).
+
+# Testing the Existence of 'Clutchness'
+
+To test if 'clutchness' exists, we can set up a paired hypothesis test for each
+year comparing regular season (rs) and postseason (ps) performance metrics. 
+Let's begin by formulating our hypotheses:
+
+H0: μ_rs = μ_ps
+There is no significant difference between regular season and postseason 
+performance. 
+
+HA: μ_rs ≠ μ_ps
+There is a significant different between regular season and postseason 
+performance.  
+
+We will use three paired t-tests the compare three key metrics across 2021 and
+2023: 
+  - OPS
+  - TB
+  - cWPA
+
+We will reject the null hypothesis is majority of metircs show p < 0.05
+```{python}
+
+# Import necessary packages
+from scipy.stats import ttest_rel
+
+# Lets start by comparing OPS metrics in regular season and postseason from 2021
+ops_t_stat_2021, ops_p_val_2021 = ttest_rel(df_2021['ops_2021_ps'], df_2021['ops_2021_rs'])
+
+# Repeat tests for TB and cWPA
+tb_t_stat_2021, tb_p_val_2021 = ttest_rel(df_2021['tb_2021_ps'], df_2021['tb_2021_rs'])
+cwpa_t_stat_2021, cwpa_p_val_2021 = ttest_rel(df_2021['cwpa_2021_ps'], df_2021['cwpa_2021_rs'])
+
+# Then repeat for the 2023 datasets
+ops_t_stat_2023, ops_p_val_2023 = ttest_rel(df_2023['ops_2023_ps'], df_2023['ops_2023_rs'])
+tb_t_stat_2023, tb_p_val_2023 = ttest_rel(df_2023['tb_2023_ps'], df_2023['tb_2023_rs'])
+cwpa_t_stat_2023, cwpa_p_val_2023 = ttest_rel(df_2023['cwpa_2023_ps'], df_2023['cwpa_2023_rs'])
+
+# Lets create a function the returns the conclusion of test if majority of 
+# t-tests reject null hypothesis
+def hypothesis_tester(metrics):
+    count = 0
+    for p in metrics:
+        if p < 0.05:
+            count += 1
+    if count / len(metrics) > 0.5:
+        return 'Majority of metrics show statistically significant differences, reject the null hypothesis.'
+    else:
+        return 'Majority of metrics do not show statisticallt significant differences, reject the null hypothesis.'
+
+# Add p_values to lists
+p_val_2021 = [ops_p_val_2021, tb_p_val_2021, cwpa_p_val_2021]
+p_val_2023 = [ops_p_val_2023, tb_p_val_2023, cwpa_p_val_2023]
+
+print(f'Conclusion for 2021: {hypothesis_tester(p_val_2021)}')
+print(f'Conclusion for 2023: {hypothesis_tester(p_val_2023)}')
+
+```
+
+## Visualizing Distributions of Paired Differences
+
+```{python}
+
+import matplotlib.pyplot as plt
+
+def overlayed_delta_distribution(df_2021, df_2023, metric, label):
+    delta_2021 = df_2021[metric].dropna()
+    delta_2023 = df_2023[metric].dropna()
+    plt.figure(figsize=(8, 5))
+    plt.hist(delta_2021, bins=15, edgecolor='black', alpha=0.6, label='2021')
+    plt.hist(delta_2023, bins=15, edgecolor='black', alpha=0.6, label='2023')
+    plt.axvline(0, color='red', linestyle='--')
+    plt.title(f'Distribution of {label} Delta (Postseason - Regular Season)')
+    plt.xlabel(f'{label} Difference')
+    plt.ylabel('Number of Players')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+# Example: OPS difference in 2021
+
+overlayed_delta_distribution(df_2021, df_2023, 'ops_delta', 'OPS')
+overlayed_delta_distribution(df_2021, df_2023, 'tb_per_ab_delta', 'TB')
+overlayed_delta_distribution(df_2021, df_2023, 'cwpa_delta', 'cWPA')
+
+```
+
+# Grouping Players Using K-Means Clustering
+
+Now that we can see that there is a statistically significant difference
+between performance and context, lets classify players into clusters that
+could give us insight into player archetypes. 
+
+## Optimal Number of Clusters
+
+To determine the most appropriate number of player groupings, we apply the 
+**Elbow Method**, a standard technique in unsupervised learning. This method
+pllots the inertia for a range of cluster amounts and identifies the point
+where additional clusters results in diminishing improvements in model fit.
+We use the three delta metrics as features, and standardize them before 
+computing the inertia values for the clustering range. 
+
+```{python}
+
+#Define features for model
+features_2021 = df_2021[[
+  'ops_delta', 
+  'tb_per_ab_delta', 
+  'cwpa_delta'
+]].copy()
+features_2023 = df_2023[[
+  'ops_delta', 
+  'tb_per_ab_delta', 
+  'cwpa_delta'
+]].copy()
+
+# Import necessary packages
+from sklearn.preprocessing import StandardScaler
+
+# Initialize scaler
+scaler = StandardScaler()
+
+# Transform dfs sing scaler
+features_2021_scaled = scaler.fit_transform(features_2021)
+features_2023_scaled= scaler.fit_transform(features_2023)
+
+# Find optimal number of clusters using Elbow Method
+def elbow(data, year):
+  inertias = []
+  K = range(1, 10)
+  for k in K:
+    model = KMeans(n_clusters=k, random_state=1234).fit(data)
+    inertias.append(model.inertia_)
+  plt.figure(figsize=(6, 4))
+  plt.plot(K, inertias, 'bo-')
+  plt.xlabel('Number of Clusters (k)')
+  plt.ylabel('Inertia')
+  plt.title(f'Elbow Method for K-Means ({year})')
+  plt.grid(True)
+  plt.tight_layout()
+  plt.show()
+
+# Show both inertia graphs
+elbow(features_2021_scaled, '2021')
+elbow(features_2023_scaled, '2023')
+
+```
+
+## Fitting the KMeans Model
+
+After identifying the optimal number of clusters, 3, we apply the KMeans
+algorithm to group players into clusters based on how drastic their performance
+changes from the regular season to the postseason/ Each player is assigned a 
+cluster label representing their similarity to other players in terms of the
+3 features we are testing for. These clusters witll serve as the basis for 
+identifying and labeling player archetypes. 
+
+```{python}
+
+# Import necessary packages
+from sklearn.cluster import KMeans
+
+kmeans_2021 = KMeans(n_clusters=3, random_state=1234)
+kmeans_2023 = KMeans(n_clusters=3, random_state=1234)
+
+df_2021['cluster'] = kmeans_2021.fit_predict(features_2021_scaled)
+df_2023['cluster'] = kmeans_2023.fit_predict(features_2023_scaled)
+
+```
+
+### Cluster Analysis
+
+With the players grouped, we summarize the average delta values for each
+cluster to interpret their behavioral patterns. this helps us identify:
+
++ "Consistent Performers": Cluster 0 -> Low Deltas
+
++ "Postseason Falloff Performers": Cluster 1 -> Negative Deltas
+
++  "Clutch Performers": Cluster 2: Positive Deltas
+
+These labels are data-drive and grounded in the actual directional shifts in
+player metrics
+
+```{python}
+
+df_2021.groupby('cluster')[['ops_delta', 'tb_per_ab_delta', 'cwpa_delta']].mean()
+
+```
+
+
+### Visualize Clusters Using PCA
+
+To visualize the clusters in two dimensions, we'll apply Prinicpal Component 
+Analysis. This reduces the three feature space in our model into two principal
+components that explain the majority of the variance in the data. This allows
+us to plot the clusters on a 2D plane, providing a visual understanding of
+how distinct each grouping of players is, offering an intuitive sense of
+seperation and group cohesion.
+
+```{python}
+
+# Import necessary packages
+from sklearn.decomposition import PCA
+
+def plot_clusters(data_scaled, labels, year):
+  pca = PCA(n_components=2)
+  reduced = pca.fit_transform(data_scaled)
+  plt.figure(figsize=(6, 5))
+  scatter = plt.scatter(reduced[:, 0], reduced[:, 1], c=labels)
+  plt.title(f'K-Means Clusters (PCA Projection) - {year}')
+  plt.xlabel('Principal Component 1')
+  plt.ylabel('Principal Component 2')
+  plt.grid(True)
+  plt.tight_layout()
+  plt.show()
+
+cluster_labels_2021 = {
+  0 : 'Consistent Performers',
+  1 : 'Postseason Falloff Performers',
+  2 : 'Clutch Performers'
+}
+
+cluster_labels_2023 = {
+  0 : 'Postseason Falloff Performers',
+  1 : 'Consistent Performers', 
+  2 : 'Clutch Performers'
+}
+
+df_2021['cluster_label'] = df_2021['cluster'].map(cluster_labels_2021)
+df_2023['cluster_label'] = df_2023['cluster'].map(cluster_labels_2023)
+
+plot_clusters(features_2021_scaled, df_2021['cluster'], '2021')
+plot_clusters(features_2023_scaled, df_2023['cluster'], '2023')
+
+```
+
+## PCA + Cluster Plot with Labels
+
+To enhance interpretability, we label each cluster using the archetypes defined
+earlier and annotate players of interest. Axes are labeled with the percentage
+of variance explained by each principal component, providing insight on how
+well the PCA projection captures the structure of the original feature space. 
+This final plot ties together the clustering analysis, performance metrics, and
+archetype classification in a single, simplified, visualization.
+
+```{python}
+
+# Find players of interest
+highlight_players_2021 = pd.concat([
+    df_2021.nlargest(2, 'ops_delta'),
+    df_2021.nsmallest(2, 'ops_delta')
+])
+
+highlight_ids_2021 = highlight_players_2021['playerid'].tolist()
+
+highlight_players_2023 = pd.concat([
+    df_2023.nlargest(2, 'ops_delta'),
+    df_2023.nsmallest(2, 'ops_delta')
+])
+
+highlight_ids_2023 = highlight_players_2023['playerid'].tolist() 
+
+def plot_label_clusters(data_scaled, df, year, highlight_ids=None):
+  pca = PCA(n_components=2)
+  reduced = pca.fit_transform(data_scaled)
+
+  df = df.copy()
+  df['PCA1'] = reduced[:, 0]
+  df['PCA2'] = reduced[:, 1]
+  plt.figure(figsize=(7, 6))
+  scatter = plt.scatter(df['PCA1'], df['PCA2'], c=df['cluster'], cmap='Set1', alpha=0.6)
+
+  for cluster_id, label in df.groupby('cluster')['cluster_label'].first().items():
+    plt.scatter([], [], c=scatter.cmap(cluster_id), label=label)
+
+  if highlight_ids:
+        for _, row in df[df['playerid'].isin(highlight_ids)].iterrows():
+            plt.annotate(row['playerid'], (row['PCA1'], row['PCA2']),
+                         textcoords="offset points", xytext=(5,5), ha='left', fontsize=8, weight='bold')
+
+  pca1_var = pca.explained_variance_ratio_[0] * 100
+  pca2_var = pca.explained_variance_ratio_[1] * 100
+  plt.xlabel(f'Principal Component 1 ({pca1_var:.1f}% variance)')
+  plt.ylabel(f'Principal Component 2 ({pca2_var:.1f}% variance)')
+  plt.title(f'K-Means Clusters with PCA Projection ({year})')
+  plt.grid(True)
+  plt.tight_layout()
+  plt.show()
+
+plot_label_clusters(features_2021_scaled, df_2021, '2021', highlight_ids_2021)
+plot_label_clusters(features_2023_scaled, df_2023, '2023', highlight_ids_2023)
+
+```
